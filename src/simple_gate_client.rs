@@ -5,24 +5,23 @@ use reqwest;
 use serde_json;
 use chrono::Utc;
 use hmac::{Hmac, Mac};
-use sha2::Sha256;
+use sha2::Sha512;
 use serde_json::Value;
 use reqwest::Method;
 
-
-pub struct SimpleBitgetClient {
+pub struct SimpleGateClient {
     api_key: String,
     api_secret: String,
 }
 
-impl SimpleBitgetClient {
-    // If no signature needed, then api_key and api_secret should be set to empty string.
+impl SimpleGateClient {
     pub fn new(api_key: &str, api_secret: &str) -> Self {
         Self { api_key: api_key.to_string(), api_secret: api_secret.to_string() }
     }
 
+    // module: spot/time
     pub async fn send_request(&self, method: Method, module: &str, params: &HashMap<String, String>) -> Result<Value, Box<dyn Error>> {
-        let url = format!("https://api.bitget.com/api/v2/{}", module);
+        let url = format!("https://api.gateio.ws/api/v4/{}", module);
 
         let params_str = match method {
             Method::GET => {
@@ -39,41 +38,20 @@ impl SimpleBitgetClient {
             }
         };
 
-        let timestamp = Utc::now().timestamp_millis().to_string();
-        let recv_window = "5000";
 
-        // Generate signature
-        let signature = if !self.api_key.is_empty() && !self.api_secret.is_empty() {
-            let mut mac = Hmac::<Sha256>::new_from_slice(self.api_secret.as_bytes()).expect("HMAC can take key of any size");
-            mac.update(timestamp.as_bytes());
-            mac.update(self.api_key.as_bytes());
-            mac.update(recv_window.as_bytes());
-            mac.update(params_str.as_bytes());
-            let result = mac.finalize();
-            let code_bytes = result.into_bytes();
-            hex::encode(code_bytes)
-        } else {
-            "".to_string()
-        };
-
-
-        // Build headers
+        // Prepare headers
         let mut headers = reqwest::header::HeaderMap::new();
-        if !self.api_key.is_empty() {
-            headers.insert("X-BAPI-API-KEY", self.api_key.parse().unwrap());
-            headers.insert("X-BAPI-SIGN", signature.parse().unwrap());
-            headers.insert("X-BAPI-SIGN-TYPE", "2".parse().unwrap());
-            headers.insert("X-BAPI-TIMESTAMP", timestamp.parse().unwrap());
-            headers.insert("X-BAPI-RECV-WINDOW", recv_window.parse().unwrap());
-            headers.insert("Content-Type", "application/json".parse().unwrap());
-        }
+        // headers.insert("Content-Type", "application/json".parse().unwrap());
+        // headers.insert("KEY", self.api_key.parse().unwrap());
+        // headers.insert("Timestamp", timestamp.parse().unwrap());
+        // headers.insert("SIGN", signature.parse().unwrap());
 
         // Send request
         let client = reqwest::Client::new();
         let response = match method {
             Method::GET => {
                 client.get(&format!("{}?{}", url, params_str))
-                    // .headers(headers)
+                    .headers(headers)
                     .send()
                     .await?
             },
@@ -92,11 +70,8 @@ impl SimpleBitgetClient {
         if response.status().is_success() {
             let response_text = response.text().await?;
             let response_json: Value = serde_json::from_str(&response_text)?;
-            if response_json["code"].as_str().unwrap().parse::<i64>().unwrap() == 0 {
-                return Ok(response_json["data"].clone());
-            } else {
-                return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Response: ret_code = {}, ret_msg = {}", response_json["retCode"], response_json["retMsg"]))));
-            }
+
+            return Ok(response_json.clone());
         } else {
             return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Response: status = [{}]", response.status()))));
         }
@@ -110,13 +85,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_request_without_signature() {
-        let client = SimpleBitgetClient {
+        let client = SimpleGateClient {
             api_key: "".to_string(),
             api_secret: "".to_string(),
         };
-        let result = client.send_request(Method::GET, "public/time", &HashMap::new()).await;
+        let result = client.send_request(Method::GET, "spot/time", &HashMap::new()).await;
 
         let now_ms = Utc::now().timestamp_millis();
-        assert!((result.unwrap().get("serverTime").unwrap().as_str().unwrap().parse::<i64>().unwrap() - now_ms).abs() < 2000);
+        let server_time_ms = result.unwrap().get("server_time").unwrap().as_i64().unwrap();
+        assert!((server_time_ms - now_ms).abs() < 2000);
     }
 }

@@ -30,8 +30,6 @@ impl SimpleBinanceClient {
         if !query_str.is_empty() {
             query_str.push_str("&");
         }
-        query_str.push_str(format!("timestamp={}", timestamp).as_str());
-        query_str.push_str(format!("&recvWindow=5000").as_str());
 
         // Generate signature
         let signature = if !self.api_key.is_empty() && !self.api_secret.is_empty() {
@@ -44,7 +42,11 @@ impl SimpleBinanceClient {
         } else {
             "".to_string()
         };
-        query_str.push_str(format!("&signature={}", signature).as_str());
+        if !signature.is_empty() {
+            query_str.push_str(format!("timestamp={}", timestamp).as_str());
+            query_str.push_str(format!("&recvWindow=5000").as_str());
+            query_str.push_str(format!("&signature={}", signature).as_str());
+        }
 
         // Build headers
         let mut headers = reqwest::header::HeaderMap::new();
@@ -54,10 +56,13 @@ impl SimpleBinanceClient {
 
         // Send request
         let full_url = format!("{}?{}", url, query_str);
+        println!("full_url: {}", full_url);
+
         let client = reqwest::Client::new();
         let response = match method {
             Method::GET => client.get(full_url).headers(headers).send().await?,
             Method::POST => client.post(full_url).headers(headers).send().await?,
+            Method::DELETE => client.delete(full_url).headers(headers).send().await?,
             _ => return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Unsupported method: {:?}", method)))),
         };
 
@@ -68,5 +73,23 @@ impl SimpleBinanceClient {
         } else {
             return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Response: status = [{}]", response.status()))));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[tokio::test]
+    async fn test_request_without_signature() {
+        let client = SimpleBinanceClient {
+            api_key: "".to_string(),
+            api_secret: "".to_string(),
+        };
+        let result = client.send_request(Method::GET, "https://api.binance.com/api/v3/time", &HashMap::new()).await;
+
+        let now_ms = Utc::now().timestamp_millis();
+        assert!((result.unwrap().get("serverTime").unwrap().as_i64().unwrap() - now_ms).abs() < 2000);
     }
 }

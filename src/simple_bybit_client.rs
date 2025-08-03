@@ -19,15 +19,8 @@ impl SimpleBybitClient {
         Self { api_key: api_key.to_string(), api_secret: api_secret.to_string() }
     }
 
-    /// Sends a request to Bybit API
-    ///
-    /// # Arguments
-    /// * `product` - API product type: market, order, position, account, asset, spot-level-token, spot-margin-trade
-    /// * `module` - Sub-module name under the product
-    /// * `category` - Trading category: spot, linear, inverse, option
-    /// * `params` - Request parameters as key-value pairs
-    pub async fn send_request(&self, method: Method, product: &str, module: &str, params: &HashMap<String, String>) -> Result<Value, Box<dyn Error>> {
-        let url = format!("https://api.bybit.com/v5/{}/{}", product, module);
+    pub async fn send_request(&self, method: Method, module: &str, params: &HashMap<String, String>) -> Result<Value, Box<dyn Error>> {
+        let url = format!("https://api.bybit.com/v5/{}", module);
 
         let params_str = match method {
             Method::GET => {
@@ -102,5 +95,24 @@ impl SimpleBybitClient {
         } else {
             return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Response: status = [{}]", response.status()))));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[tokio::test]
+    async fn test_request_without_signature() {
+        let client = SimpleBybitClient {
+            api_key: "".to_string(),
+            api_secret: "".to_string(),
+        };
+        let result = client.send_request(Method::GET, "market/time", &HashMap::new()).await;
+
+        let now_ms = Utc::now().timestamp_millis();
+        let server_time_ms = result.unwrap().get("timeNano").unwrap().as_str().unwrap().parse::<i64>().unwrap() / 1000000;
+        assert!((server_time_ms - now_ms).abs() < 2000);
     }
 }
