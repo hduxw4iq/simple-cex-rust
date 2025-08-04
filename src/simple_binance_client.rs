@@ -32,19 +32,17 @@ impl SimpleBinanceClient {
         }
 
         // Generate signature
-        let signature = if !self.api_key.is_empty() && !self.api_secret.is_empty() {
+
+        if !self.api_key.is_empty() && !self.api_secret.is_empty() {
+            query_str.push_str(format!("timestamp={}", timestamp).as_str());
+            query_str.push_str(format!("&recvWindow=5000").as_str());
+
             let mut mac = Hmac::<Sha256>::new_from_slice(self.api_secret.as_bytes()).expect("HMAC can take key of any size");
             mac.update(query_str.as_bytes());
             let result = mac.finalize();
             let code_bytes = result.into_bytes();
             let signature: String = url::form_urlencoded::byte_serialize(format!("{:x}", code_bytes).as_bytes()).collect();
-            signature
-        } else {
-            "".to_string()
-        };
-        if !signature.is_empty() {
-            query_str.push_str(format!("timestamp={}", timestamp).as_str());
-            query_str.push_str(format!("&recvWindow=5000").as_str());
+
             query_str.push_str(format!("&signature={}", signature).as_str());
         }
 
@@ -56,7 +54,6 @@ impl SimpleBinanceClient {
 
         // Send request
         let full_url = format!("{}?{}", url, query_str);
-        println!("full_url: {}", full_url);
 
         let client = reqwest::Client::new();
         let response = match method {
