@@ -23,11 +23,11 @@ impl SimpleBinanceClient {
         }
     }
 
-    pub fn new_with_proxy(api_key: &str, api_secret: &str, proxy: Option<String>) -> Self {
+    pub fn new_with_proxy(api_key: &str, api_secret: &str, proxy: &Option<String>) -> Self {
         Self {
             api_key: api_key.to_string(),
             api_secret: api_secret.to_string(),
-            proxy,
+            proxy: proxy.clone(),
         }
     }
 
