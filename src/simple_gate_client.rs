@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::error::Error;
 use hex;
 use reqwest;
 use serde_json;

@@ -11,15 +11,28 @@ use reqwest::Method;
 pub struct SimpleBinanceClient {
     api_key: String,
     api_secret: String,
+    proxy: Option<String>,  // Format: "host:port"
 }
 
 impl SimpleBinanceClient {
     pub fn new(api_key: &str, api_secret: &str) -> Self {
-        Self { api_key: api_key.to_string(), api_secret: api_secret.to_string() }
+        Self {
+            api_key: api_key.to_string(),
+            api_secret: api_secret.to_string(),
+            proxy: None,
+        }
     }
 
-    pub async fn send_request(&self, method: Method, url: &str, params: &HashMap<String, String>) -> Result<Value, Box<dyn Error + Send + Sync>> {
-        assert!(url.starts_with("https://"));
+    pub fn new_with_proxy(api_key: &str, api_secret: &str, proxy: Option<String>) -> Self {
+        Self {
+            api_key: api_key.to_string(),
+            api_secret: api_secret.to_string(),
+            proxy,
+        }
+    }
+
+    pub async fn send_request(&self, method: Method, full_url: &str, params: &HashMap<String, String>) -> Result<Value, Box<dyn Error + Send + Sync>> {
+        assert!(full_url.starts_with("https://"));
 
         let timestamp = Utc::now().timestamp_millis().to_string();
 
@@ -53,9 +66,19 @@ impl SimpleBinanceClient {
         }
 
         // Send request
-        let full_url = format!("{}?{}", url, query_str);
+        let full_url = format!("{}?{}", full_url, query_str);
 
-        let client = reqwest::Client::new();
+        // Build client with optional proxy
+        let mut client_builder = reqwest::Client::builder();
+        if let Some(proxy_addr) = &self.proxy {
+            let proxy_url = format!("http://{}", proxy_addr);
+            let proxy = reqwest::Proxy::https(&proxy_url)
+                .map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to create proxy: {}", e))))?;
+            client_builder = client_builder.proxy(proxy);
+        }
+        let client = client_builder.build()
+            .map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to build client: {}", e))))?;
+
         let response = match method {
             Method::GET => client.get(full_url).headers(headers).send().await?,
             Method::POST => client.post(full_url).headers(headers).send().await?,
@@ -80,10 +103,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_request_without_signature() {
-        let client = SimpleBinanceClient {
-            api_key: "".to_string(),
-            api_secret: "".to_string(),
-        };
+        let client = SimpleBinanceClient::new("", "");
+        let result = client.send_request(Method::GET, "https://api.binance.com/api/v3/time", &HashMap::new()).await;
+
+        let now_ms = Utc::now().timestamp_millis();
+        assert!((result.unwrap().get("serverTime").unwrap().as_i64().unwrap() - now_ms).abs() < 2000);
+    }
+
+    #[tokio::test]
+    async fn test_request_wihtout_signature_with_proxy() {
+        let client = SimpleBinanceClient::new_with_proxy("", "", Some("oas.w4iq.com:3128".to_string()));
         let result = client.send_request(Method::GET, "https://api.binance.com/api/v3/time", &HashMap::new()).await;
 
         let now_ms = Utc::now().timestamp_millis();
