@@ -13,11 +13,16 @@ use hmac::digest::Digest;
 pub struct SimpleGateClient {
     api_key: String,
     api_secret: String,
+    proxy: Option<String>,  // Format: "host:port"
 }
 
 impl SimpleGateClient {
-    pub fn new(api_key: &str, api_secret: &str) -> Self {
-        Self { api_key: api_key.to_string(), api_secret: api_secret.to_string() }
+    pub fn new(api_key: &str, api_secret: &str, proxy: &Option<String>) -> Self {
+        Self {
+            api_key: api_key.to_string(),
+            api_secret: api_secret.to_string(),
+            proxy: proxy.clone(),
+        }
     }
 
     // module: spot/time
@@ -55,8 +60,18 @@ impl SimpleGateClient {
             headers.insert("SIGN", signature.parse().unwrap());
         }
 
+        // Build client with optional proxy
+        let mut client_builder = reqwest::Client::builder();
+        if let Some(proxy_addr) = &self.proxy {
+            let proxy_url = format!("http://{}", proxy_addr);
+            let proxy = reqwest::Proxy::https(&proxy_url)
+                .map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to create proxy: {}", e))))?;
+            client_builder = client_builder.proxy(proxy);
+        }
+        let client = client_builder.build()
+            .map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to build client: {}", e))))?;
+
         // Send request
-        let client = reqwest::Client::new();
         let response = match method {
             Method::GET => {
                 client.get(full_url)
@@ -107,10 +122,17 @@ mod tests {
 
     #[tokio::test]
     async fn test_request_without_signature() {
-        let client = SimpleGateClient {
-            api_key: "".to_string(),
-            api_secret: "".to_string(),
-        };
+        let client = SimpleGateClient::new("", "", &None);
+        let result = client.send_request(Method::GET, "spot/time", &HashMap::new()).await;
+
+        let now_ms = Utc::now().timestamp_millis();
+        let server_time_ms = result.unwrap().get("server_time").unwrap().as_i64().unwrap();
+        assert!((server_time_ms - now_ms).abs() < 2000);
+    }
+
+    #[tokio::test]
+    async fn test_request_without_signature_with_proxy() {
+        let client = SimpleGateClient::new("", "", &Some("oas.w4iq.com:3128".to_string()));
         let result = client.send_request(Method::GET, "spot/time", &HashMap::new()).await;
 
         let now_ms = Utc::now().timestamp_millis();
