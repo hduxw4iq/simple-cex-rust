@@ -15,15 +15,7 @@ pub struct SimpleBinanceClient {
 }
 
 impl SimpleBinanceClient {
-    pub fn new(api_key: &str, api_secret: &str) -> Self {
-        Self {
-            api_key: api_key.to_string(),
-            api_secret: api_secret.to_string(),
-            proxy: None,
-        }
-    }
-
-    pub fn new_with_proxy(api_key: &str, api_secret: &str, proxy: &Option<String>) -> Self {
+    pub fn new(api_key: &str, api_secret: &str, proxy: &Option<String>) -> Self {
         Self {
             api_key: api_key.to_string(),
             api_secret: api_secret.to_string(),
@@ -103,7 +95,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_request_without_signature() {
-        let client = SimpleBinanceClient::new("", "");
+        let client = SimpleBinanceClient::new("", "", &None);
         let result = client.send_request(Method::GET, "https://api.binance.com/api/v3/time", &HashMap::new()).await;
 
         let now_ms = Utc::now().timestamp_millis();
@@ -112,7 +104,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_request_wihtout_signature_with_proxy() {
-        let client = SimpleBinanceClient::new_with_proxy("", "", Some("oas.w4iq.com:3128".to_string()));
+        let client = SimpleBinanceClient::new("", "", &Some("oas.w4iq.com:3128".to_string()));
         let result = client.send_request(Method::GET, "https://api.binance.com/api/v3/time", &HashMap::new()).await;
 
         let now_ms = Utc::now().timestamp_millis();
