@@ -61,7 +61,9 @@ impl SimpleBinanceClient {
         let full_url = format!("{}?{}", full_url, query_str);
 
         // Build client with optional proxy
-        let mut client_builder = reqwest::Client::builder();
+        let mut client_builder = reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(5))
+            .timeout(std::time::Duration::from_secs(30));
         if let Some(proxy_addr) = &self.proxy {
             let proxy_url = format!("http://{}", proxy_addr);
             let proxy = reqwest::Proxy::https(&proxy_url)
