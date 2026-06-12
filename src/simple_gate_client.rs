@@ -143,7 +143,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_request_without_signature() {
-        let client = SimpleGateClient::new("", "", &None);
+        let client = SimpleGateClient::new("", "", None);
         let result = client
             .send_request(Method::GET, "spot/time", &HashMap::new())
             .await;
@@ -160,7 +160,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_request_without_signature_with_proxy() {
-        let client = SimpleGateClient::new("", "", &Some("oas.w4iq.com:3128".to_string()));
+        let client = SimpleGateClient::new("", "", Some("oas.w4iq.com:3128".to_string()));
         let result = client
             .send_request(Method::GET, "spot/time", &HashMap::new())
             .await;
