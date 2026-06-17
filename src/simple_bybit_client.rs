@@ -110,7 +110,9 @@ impl SimpleBybitClient {
                 return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Response: ret_code = {}, ret_msg = {}", response_json["retCode"], response_json["retMsg"]))));
             }
         } else {
-            return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Response: status = [{}]", response.status()))));
+            let status = response.status();
+            let response_text = response.text().await.unwrap_or_default();
+            return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Response: status = [{}], body = {}", status, response_text))));
         }
     }
 }

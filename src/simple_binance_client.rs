@@ -80,12 +80,13 @@ impl SimpleBinanceClient {
             _ => return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Unsupported method: {:?}", method)))),
         };
 
-        if response.status().is_success() {
-            let response_text = response.text().await?;
+        let status = response.status();
+        let response_text = response.text().await?;
+        if status.is_success() {
             let response_json: Value = serde_json::from_str(&response_text)?;
             return Ok(response_json);
         } else {
-            return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Response: status = [{}]", response.status()))));
+            return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Response: status = [{}], body = {}", status, response_text))));
         }
     }
 }

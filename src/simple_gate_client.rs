@@ -99,15 +99,16 @@ impl SimpleGateClient {
             }
         };
 
-        if response.status().is_success() {
-            let response_text = response.text().await?;
+        let status = response.status();
+        let response_text = response.text().await?;
+        if status.is_success() {
             let response_json: Value = serde_json::from_str(&response_text)?;
 
             return Ok(response_json.clone());
         } else {
             return Err(Box::new(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("Response: status = [{}]", response.status()),
+                format!("Response: status = [{}], body = {}", status, response_text),
             )));
         }
     }
