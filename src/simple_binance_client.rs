@@ -23,6 +23,28 @@ impl SimpleBinanceClient {
         }
     }
 
+    /// Like `send_request`, but retries up to `max_attempts` times on error,
+    /// sleeping 5s between attempts. Only use this for idempotent (GET) requests
+    /// -- retrying POST/DELETE may duplicate orders. The original error from the
+    /// final attempt is propagated so callers can walk its `source()` chain.
+    pub async fn send_request_with_retry(&self, method: Method, full_url: &str, params: &HashMap<String, String>, max_attempts: u32) -> Result<Value, Box<dyn Error + Send + Sync>> {
+        assert!(max_attempts >= 1);
+        let mut attempt = 1;
+        loop {
+            match self.send_request(method.clone(), full_url, params).await {
+                Ok(value) => return Ok(value),
+                Err(e) => {
+                    if attempt >= max_attempts {
+                        return Err(e);
+                    }
+                    eprintln!("send_request attempt {}/{} for {} failed: {}", attempt, max_attempts, full_url, e);
+                    attempt += 1;
+                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                }
+            }
+        }
+    }
+
     pub async fn send_request(&self, method: Method, full_url: &str, params: &HashMap<String, String>) -> Result<Value, Box<dyn Error + Send + Sync>> {
         assert!(full_url.starts_with("https://"));
 
